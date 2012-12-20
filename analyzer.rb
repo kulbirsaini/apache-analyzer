@@ -37,22 +37,21 @@ end
 class Message < ActiveRecord::Base
 end
 
-def format_time(line)
-  line.sub(/\[([^\]]+)\]/, '"\1"')
-end
-
 def parse(file)
   i = 1
+  last_time = Message.order('time').last.try(:time)
+  puts last_time
   File.open(file).each_line do |line|
     puts i
     i += 1
     sleep 4 if i % 2000 == 0
     begin
-      parsed_line = CSV.parse_line(format_time(line), :col_sep => ' ', :headers => HEADERS)
+      parsed_line = CSV.parse_line(line.sub(/\[([^\]]+)\]/, '"\1"').gsub('\"', ''), :col_sep => ' ', :headers => HEADERS)
       domain = parsed_line[:domain].split(':').first
       client_ip = parsed_line[:client_ip]
       next if SKIP_IPS.include?(client_ip)
       time = parsed_line[:time].sub(/:/, ' ').to_datetime
+      next if last_time and last_time > time
       request = parsed_line[:request]
       if request == '-'
         request, method, path = '', '', ''
@@ -65,8 +64,10 @@ def parse(file)
       referer = parsed_line[:referer]
       user_agent = parsed_line[:user_agent]
       Message.create({ :domain => domain, :client_ip => client_ip, :time => time, :request => request, :method => method, :path => path, :status => status, :size => size, :referer => referer, :user_agent => user_agent })
-    rescue
+    rescue => exception
       puts line
+      puts "Error during processing: #{$!}"
+      puts "Backtrace:\n\t#{exception.backtrace.join("\n\t")}"
       break
     end
   end
