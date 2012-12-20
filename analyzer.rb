@@ -35,6 +35,17 @@ def create_table
 end
 
 class Message < ActiveRecord::Base
+  POST_THRESHOLD = 50
+  REQUEST_THRESHOLD = 300
+
+  def offending_ips(from = 2.days.ago.to_time, to = Time.now)
+    where(:method => 'POST').where('time => ? AND time <= ?', [from, to]).select('client_ip, COUNT(*) as access_count').group('client_ip').order('access_count desc').select{ |m| m['access_count'] > POST_THRESHOLD }.map{ |m| m.client_ip }
+  end
+
+  def blacklist_ips(from = 2.days.ago.to_time, to = Time.now)
+    @blacklist_ips = Message.where('client_ip IN (?)', offending_ips(from, to)).select('client_ip, COUNT(*) as access_count').group('client_ip').order('access_count desc').select{ |m| m['access_count'] > REQUEST_THRESHOLD }.map{ |m| m.client_ip }.sort
+    File.open('blacklist.txt', 'w').write(@blacklist_ips.join("\n"))
+  end
 end
 
 def parse(file)
