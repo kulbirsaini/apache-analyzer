@@ -15,6 +15,7 @@ SKIP_METHODS = [ 'OPTIONS', 'PROPFIND' ]
 def connect_db
   ActiveRecord::Base.establish_connection(YAML.load_file('database.yml'))
 end
+connect_db
 
 def create_table
   table_name = Message.table_name
@@ -39,12 +40,13 @@ class Message < ActiveRecord::Base
   REQUEST_THRESHOLD = 300
 
   def self.offending_ips(from = 2.days.ago.to_time, to = Time.now)
-    where(:method => 'POST').where('time => ? AND time <= ?', [from, to]).select('client_ip, COUNT(*) as access_count').group('client_ip').order('access_count desc').select{ |m| m['access_count'] > POST_THRESHOLD }.map{ |m| m.client_ip }
+    where(:method => 'POST').where('time >= ? AND time <= ?', from, to).select('client_ip, COUNT(*) as access_count').group('client_ip').order('access_count desc').select{ |m| m['access_count'] > POST_THRESHOLD }.map{ |m| m.client_ip }
   end
 
   def self.blacklist_ips(from = 2.days.ago.to_time, to = Time.now)
-    @blacklist_ips = where('client_ip IN (?)', Message.offending_ips(from, to)).select('client_ip, COUNT(*) as access_count').group('client_ip').order('access_count desc').select{ |m| m['access_count'] > REQUEST_THRESHOLD }.map{ |m| m.client_ip }.sort
+    @blacklist_ips = where('client_ip IN (?)', Message.offending_ips(from, to)).where('time >= ? AND time <= ?', from, to).select('client_ip, COUNT(*) as access_count').group('client_ip').order('access_count desc').select{ |m| m['access_count'] > REQUEST_THRESHOLD }.map{ |m| m.client_ip }.sort
     File.open('blacklist.txt', 'w').write(@blacklist_ips.join("\n"))
+    puts "Written #{@blacklist_ips.count} IP addresses"
   end
 end
 
@@ -85,7 +87,6 @@ def parse(file)
 end
 
 if __FILE__ == $0
-  connect_db
   create_table
   parse(ARGV[0])
 end
