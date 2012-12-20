@@ -4,5 +4,7 @@ log/*
 *.*sql
 *.src.js
 *.txt
+*.log
+*.log.*
 .screenrc
 database.yml
