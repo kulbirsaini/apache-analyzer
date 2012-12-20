@@ -1,0 +1,7 @@
+db/*.sqlite3
+log/*
+.*.sw*
+*.*sql
+*.src.js
+*.txt
+.screenrc
