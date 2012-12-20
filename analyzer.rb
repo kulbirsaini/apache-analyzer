@@ -10,7 +10,7 @@ require 'mysql2'
 
 HEADERS = [ :domain, :client_ip, :u1, :u2, :time, :request, :status, :size, :referer, :user_agent ]
 SKIP_IPS = [ '108.161.130.153', '127.0.0.1', '183.83.35.235' ]
-SKIP_METHODS = [ 'OPTIONS', 'PUT', 'DELETE' ]
+SKIP_METHODS = [ 'OPTIONS', 'PROPFIND' ]
 
 def connect_db
   ActiveRecord::Base.establish_connection(YAML.load_file('database.yml'))
@@ -44,26 +44,31 @@ end
 def parse(file)
   i = 1
   File.open(file).each_line do |line|
-    parsed_line = CSV.parse_line(format_time(line), :col_sep => ' ', :headers => HEADERS)
-    domain = parsed_line[:domain].split(':').first
-    client_ip = parsed_line[:client_ip]
-    next if SKIP_IPS.include?(client_ip)
-    time = parsed_line[:time].sub(/:/, ' ').to_datetime
-    request = parsed_line[:request]
-    if request == '-'
-      request, method, path = '', '', ''
-    else
-      method, path = parsed_line[:request].scan(/[^ ]+/)
-    end
-    next if SKIP_METHODS.include?(method)
-    status = parsed_line[:status].to_i
-    size = parsed_line[:size].to_i
-    referer = parsed_line[:referer]
-    user_agent = parsed_line[:user_agent]
-    Message.create({ :domain => domain, :client_ip => client_ip, :time => time, :request => request, :method => method, :path => path, :status => status, :size => size, :referer => referer, :user_agent => user_agent })
     puts i
     i += 1
     sleep 4 if i % 2000 == 0
+    begin
+      parsed_line = CSV.parse_line(format_time(line), :col_sep => ' ', :headers => HEADERS)
+      domain = parsed_line[:domain].split(':').first
+      client_ip = parsed_line[:client_ip]
+      next if SKIP_IPS.include?(client_ip)
+      time = parsed_line[:time].sub(/:/, ' ').to_datetime
+      request = parsed_line[:request]
+      if request == '-'
+        request, method, path = '', '', ''
+      else
+        method, path = parsed_line[:request].scan(/[^ ]+/)
+      end
+      next if SKIP_METHODS.include?(method)
+      status = parsed_line[:status].to_i
+      size = parsed_line[:size].to_i
+      referer = parsed_line[:referer]
+      user_agent = parsed_line[:user_agent]
+      Message.create({ :domain => domain, :client_ip => client_ip, :time => time, :request => request, :method => method, :path => path, :status => status, :size => size, :referer => referer, :user_agent => user_agent })
+    rescue
+      puts line
+      break
+    end
   end
 end
 
