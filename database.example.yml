@@ -1,0 +1,5 @@
+adapter: mysql2
+host: localhost
+username: username
+password: passowrd
+database: db_name

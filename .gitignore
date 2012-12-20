@@ -5,3 +5,4 @@ log/*
 *.src.js
 *.txt
 .screenrc
+database.yml
