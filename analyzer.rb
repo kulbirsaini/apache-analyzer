@@ -51,13 +51,12 @@ class Message < ActiveRecord::Base
 end
 
 def parse(file)
-  i = 1
+  db_queries = 0
   last_time = Message.order('time').last.try(:time)
-  puts last_time
-  File.open(file).each_line do |line|
-    puts i
-    i += 1
-    sleep 4 if i % 2000 == 0
+  File.open(file).each_with_index do |line, index|
+    print '.' if index % 10 == 0
+    puts if (index + 1) % 1200 == 0
+    sleep 4 if (db_queries + 1) % 3000 == 0 or (index + 1) % 20000 == 0
     begin
       parsed_line = CSV.parse_line(line.sub(/\[([^\]]+)\]/, '"\1"').gsub('\"', ''), :col_sep => ' ', :headers => HEADERS)
       domain = parsed_line[:domain].split(':').first
@@ -77,13 +76,21 @@ def parse(file)
       referer = parsed_line[:referer]
       user_agent = parsed_line[:user_agent]
       Message.create({ :domain => domain, :client_ip => client_ip, :time => time, :request => request, :method => method, :path => path, :status => status, :size => size, :referer => referer, :user_agent => user_agent })
+      db_queries += 1
+    rescue SystemExit, Interrupt
+      puts
+      puts index + 1
+      puts line
+      raise
     rescue => exception
+      puts index + 1
       puts line
       puts "Error during processing: #{$!}"
       puts "Backtrace:\n\t#{exception.backtrace.join("\n\t")}"
       break
     end
   end
+  puts
 end
 
 if __FILE__ == $0
