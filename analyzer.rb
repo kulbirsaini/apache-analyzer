@@ -8,7 +8,7 @@ require 'active_support/all'
 require 'active_record'
 require 'mysql2'
 
-HEADERS = [ :domain, :client_ip, :u1, :u2, :time, :request, :status, :size, :referer, :user_agent, :unique_id ]
+HEADERS = [ :domain, :unique_id, :client_ip, :u1, :u2, :time, :request, :status, :size, :referer, :user_agent ]
 SKIP_IPS = [ '108.161.130.153', '127.0.0.1', '183.83.35.235' ]
 SKIP_METHODS = [ 'OPTIONS', 'PROPFIND' ]
 
@@ -19,7 +19,7 @@ connect_db
 
 def create_table
   table_name = Message.table_name
-  query = "CREATE TABLE IF NOT EXISTS #{table_name} (id BIGINT PRIMARY KEY AUTO_INCREMENT, domain VARCHAR(64), client_ip VARCHAR(24), time TIMESTAMP, request VARCHAR(512), method VARCHAR(12), path VARCHAR(255), status INT, size INT, referer VARCHAR(512), user_agent VARCHAR(255), unique_id VARCHAR(64) BINARY);"
+  query = "CREATE TABLE IF NOT EXISTS #{table_name} (id BIGINT PRIMARY KEY AUTO_INCREMENT, domain VARCHAR(64), client_ip VARCHAR(24), time TIMESTAMP, request VARCHAR(512), method VARCHAR(12), path VARCHAR(255), status INT, size INT, referer VARCHAR(512), user_agent VARCHAR(255), unique_id VARCHAR(64) BINARY NOT NULL);"
   indices = {
     :domain_index => "CREATE INDEX domain_index ON #{table_name} (domain);",
     :client_ip_index => "CREATE INDEX client_ip_index ON #{table_name} (client_ip);",
@@ -74,7 +74,7 @@ def parse(file)
       size = parsed_line[:size].to_i
       referer = parsed_line[:referer]
       user_agent = parsed_line[:user_agent]
-      Message.create({ :domain => domain, :client_ip => client_ip, :time => time, :request => request, :method => method, :path => path, :status => status, :size => size, :referer => referer, :user_agent => user_agent })
+      Message.create({ :domain => domain, :client_ip => client_ip, :time => time, :request => request, :method => method, :path => path, :status => status, :size => size, :referer => referer, :user_agent => user_agent, :unique_id => unique_id })
       db_queries += 1
     rescue SystemExit, Interrupt
       puts
