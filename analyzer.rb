@@ -8,7 +8,7 @@ require 'active_support/all'
 require 'active_record'
 require 'mysql2'
 
-HEADERS = [ :domain, :client_ip, :u1, :u2, :time, :request, :status, :size, :referer, :user_agent ]
+HEADERS = [ :domain, :client_ip, :u1, :u2, :time, :request, :status, :size, :referer, :user_agent, :unique_id ]
 SKIP_IPS = [ '108.161.130.153', '127.0.0.1', '183.83.35.235' ]
 SKIP_METHODS = [ 'OPTIONS', 'PROPFIND' ]
 
@@ -19,7 +19,7 @@ connect_db
 
 def create_table
   table_name = Message.table_name
-  query = "CREATE TABLE IF NOT EXISTS #{table_name} (id BIGINT PRIMARY KEY AUTO_INCREMENT, domain VARCHAR(64), client_ip VARCHAR(24), time TIMESTAMP, request VARCHAR(512), method VARCHAR(12), path VARCHAR(255), status INT, size INT, referer VARCHAR(512), user_agent VARCHAR(255));"
+  query = "CREATE TABLE IF NOT EXISTS #{table_name} (id BIGINT PRIMARY KEY AUTO_INCREMENT, domain VARCHAR(64), client_ip VARCHAR(24), time TIMESTAMP, request VARCHAR(512), method VARCHAR(12), path VARCHAR(255), status INT, size INT, referer VARCHAR(512), user_agent VARCHAR(255), unique_id VARCHAR(64) BINARY);"
   indices = {
     :domain_index => "CREATE INDEX domain_index ON #{table_name} (domain);",
     :client_ip_index => "CREATE INDEX client_ip_index ON #{table_name} (client_ip);",
@@ -27,7 +27,7 @@ def create_table
     :status_index => "CREATE INDEX status_index ON #{table_name} (status);",
     :user_agent_index => "CREATE INDEX user_agent_index ON #{table_name} (user_agent);",
     :time_index => "CREATE INDEX time_index ON #{table_name} (time);",
-    #:domain_client_ip_time_request_index => "CREATE UNIQUE INDEX domain_client_ip_time_request_index ON #{table_name} (domain, client_ip, time, request);"
+    :unique_id_index => "CREATE UNIQUE INDEX unique_id_index ON #{table_name} (unique_id);"
   }
   ActiveRecord::Base.connection.execute(query)
   results = ActiveRecord::Base.connection.execute("SHOW INDEX FROM #{table_name};")
@@ -53,25 +53,23 @@ end
 
 def parse(file)
   db_queries = 0
-  last_time = Message.order('time').last.try(:time)
   File.open(file).each_with_index do |line, index|
     print '.' if index % 10 == 0
     puts " #{index + 1}" if (index + 1) % 1200 == 0
     sleep 4 if (db_queries + 1) % 3000 == 0 or (index + 1) % 20000 == 0
     begin
       parsed_line = CSV.parse_line(line.sub(/\[([^\]]+)\]/, '"\1"').gsub('\"', ''), :col_sep => ' ', :headers => HEADERS)
-      domain = parsed_line[:domain].split(':').first
+      unique_id = parsed_line[:unique_id]
       client_ip = parsed_line[:client_ip]
-      next if SKIP_IPS.include?(client_ip)
-      time = parsed_line[:time].sub(/:/, ' ').to_datetime
-      next if last_time and last_time > time
       request = parsed_line[:request]
       if request == '-'
         request, method, path = '', '', ''
       else
         method, path = parsed_line[:request].scan(/[^ ]+/)
       end
-      next if SKIP_METHODS.include?(method)
+      next if SKIP_IPS.include?(client_ip) or SKIP_METHODS.include?(method) or Message.where(:unique_id => unique_id).first
+      time = parsed_line[:time].sub(/:/, ' ').to_datetime
+      domain = parsed_line[:domain].split(':').first
       status = parsed_line[:status].to_i
       size = parsed_line[:size].to_i
       referer = parsed_line[:referer]
