@@ -21,16 +21,17 @@ def create_table
   table_name = Message.table_name
   query = "CREATE TABLE IF NOT EXISTS #{table_name} (id BIGINT PRIMARY KEY AUTO_INCREMENT, domain VARCHAR(64), client_ip VARCHAR(24), time TIMESTAMP, request VARCHAR(512), method VARCHAR(12), path VARCHAR(255), status INT, size INT, referer VARCHAR(512), user_agent VARCHAR(255));"
   indices = {
-    :domain => "CREATE INDEX domain_index ON #{table_name} (domain);",
-    :client_ip => "CREATE INDEX client_ip_index ON #{table_name} (client_ip);",
-    :method => "CREATE INDEX method_index ON #{table_name} (method);",
-    :status => "CREATE INDEX status_index ON #{table_name} (status);",
-    :user_agent => "CREATE INDEX user_agent_index ON #{table_name} (user_agent);",
-    :time => "CREATE INDEX time_index ON #{table_name} (time);"
+    :domain_index => "CREATE INDEX domain_index ON #{table_name} (domain);",
+    :client_ip_index => "CREATE INDEX client_ip_index ON #{table_name} (client_ip);",
+    :method_index => "CREATE INDEX method_index ON #{table_name} (method);",
+    :status_index => "CREATE INDEX status_index ON #{table_name} (status);",
+    :user_agent_index => "CREATE INDEX user_agent_index ON #{table_name} (user_agent);",
+    :time_index => "CREATE INDEX time_index ON #{table_name} (time);",
+    #:domain_client_ip_time_request_index => "CREATE UNIQUE INDEX domain_client_ip_time_request_index ON #{table_name} (domain, client_ip, time, request);"
   }
   ActiveRecord::Base.connection.execute(query)
   results = ActiveRecord::Base.connection.execute("SHOW INDEX FROM #{table_name};")
-  existing_indices = results.map{ |result| Hash[results.fields.zip(result)] }.map{ |result| result['Column_name'].to_sym }
+  existing_indices = results.map{ |result| Hash[results.fields.zip(result)] }.map{ |result| result['Key_name'].to_sym }.uniq
   (indices.keys - existing_indices).each { |index| ActiveRecord::Base.connection.execute(indices[index]) }
   nil
 end
@@ -55,7 +56,7 @@ def parse(file)
   last_time = Message.order('time').last.try(:time)
   File.open(file).each_with_index do |line, index|
     print '.' if index % 10 == 0
-    puts if (index + 1) % 1200 == 0
+    puts " #{index + 1}" if (index + 1) % 1200 == 0
     sleep 4 if (db_queries + 1) % 3000 == 0 or (index + 1) % 20000 == 0
     begin
       parsed_line = CSV.parse_line(line.sub(/\[([^\]]+)\]/, '"\1"').gsub('\"', ''), :col_sep => ' ', :headers => HEADERS)
