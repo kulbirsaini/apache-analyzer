@@ -56,7 +56,7 @@ def parse(file)
   File.open(file).each_with_index do |line, index|
     print '.' if index % 10 == 0
     puts " #{index + 1}" if (index + 1) % 1200 == 0
-    sleep 4 if (db_queries + 1) % 3000 == 0 or (index + 1) % 20000 == 0
+    sleep 2 if (db_queries + 1) % 4000 == 0 or (index + 1) % 20000 == 0
     begin
       parsed_line = CSV.parse_line(line.sub(/\[([^\]]+)\]/, '"\1"').gsub('\"', ''), :col_sep => ' ', :headers => HEADERS)
       unique_id = parsed_line[:unique_id]
