@@ -7,14 +7,16 @@ require 'csv'
 require 'active_support/all'
 require 'active_record'
 require 'mysql2'
+require 'pathname'
 require 'trollop'
 
 HEADERS = [ :domain, :unique_id, :client_ip, :u1, :u2, :time, :request, :status, :size, :referer, :user_agent ]
 SKIP_IPS = [ '108.161.130.153', '127.0.0.1', '183.83.35.235' ]
 SKIP_METHODS = [ 'OPTIONS', 'PROPFIND' ]
+ROOT = Pathname.new(File.expand_path('..', __FILE__))
 
 def connect_db
-  ActiveRecord::Base.establish_connection(YAML.load_file('database.yml'))
+  ActiveRecord::Base.establish_connection(YAML.load_file(ROOT + 'database.yml'))
 end
 connect_db
 
@@ -47,7 +49,7 @@ class Message < ActiveRecord::Base
 
   def self.blacklist_ips(from = 2.days.ago.to_time, to = Time.now, request_threshold = REQUEST_THRESHOLD, post_threshold = POST_THRESHOLD)
     @blacklist_ips = where('client_ip IN (?)', Message.offending_ips(from, to, post_threshold)).where('time >= ? AND time <= ?', from, to).select('client_ip, COUNT(*) as access_count').group('client_ip').order('access_count desc').select{ |m| m['access_count'] > request_threshold }.map{ |m| m.client_ip }.sort
-    file = File.open('blacklist.txt', 'w')
+    file = File.open(ROOT + 'blacklist.txt', 'w')
     file.write(@blacklist_ips.join("\n") + "\n")
     file.close()
     puts "Written #{@blacklist_ips.count} IP addresses"
