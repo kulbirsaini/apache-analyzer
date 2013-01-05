@@ -7,6 +7,7 @@ require 'csv'
 require 'active_support/all'
 require 'active_record'
 require 'mysql2'
+require 'trollop'
 
 HEADERS = [ :domain, :unique_id, :client_ip, :u1, :u2, :time, :request, :status, :size, :referer, :user_agent ]
 SKIP_IPS = [ '108.161.130.153', '127.0.0.1', '183.83.35.235' ]
@@ -38,14 +39,14 @@ end
 
 class Message < ActiveRecord::Base
   POST_THRESHOLD = 50
-  REQUEST_THRESHOLD = 300
+  REQUEST_THRESHOLD = 400
 
-  def self.offending_ips(from = 2.days.ago.to_time, to = Time.now)
-    where(:method => 'POST').where('time >= ? AND time <= ?', from, to).select('client_ip, COUNT(*) as access_count').group('client_ip').order('access_count desc').select{ |m| m['access_count'] > POST_THRESHOLD }.map{ |m| m.client_ip }
+  def self.offending_ips(from = 2.days.ago.to_time, to = Time.now, post_threshold = POST_THRESHOLD)
+    where(:method => 'POST').where('time >= ? AND time <= ?', from, to).select('client_ip, COUNT(*) as access_count').group('client_ip').order('access_count desc').select{ |m| m['access_count'] > post_threshold }.map{ |m| m.client_ip }
   end
 
-  def self.blacklist_ips(from = 2.days.ago.to_time, to = Time.now)
-    @blacklist_ips = where('client_ip IN (?)', Message.offending_ips(from, to)).where('time >= ? AND time <= ?', from, to).select('client_ip, COUNT(*) as access_count').group('client_ip').order('access_count desc').select{ |m| m['access_count'] > REQUEST_THRESHOLD }.map{ |m| m.client_ip }.sort
+  def self.blacklist_ips(from = 2.days.ago.to_time, to = Time.now, request_threshold = REQUEST_THRESHOLD, post_threshold = POST_THRESHOLD)
+    @blacklist_ips = where('client_ip IN (?)', Message.offending_ips(from, to, post_threshold)).where('time >= ? AND time <= ?', from, to).select('client_ip, COUNT(*) as access_count').group('client_ip').order('access_count desc').select{ |m| m['access_count'] > request_threshold }.map{ |m| m.client_ip }.sort
     file = File.open('blacklist.txt', 'w')
     file.write(@blacklist_ips.join("\n") + "\n")
     file.close()
@@ -95,6 +96,19 @@ def parse(file)
 end
 
 if __FILE__ == $0
+  opts = Trollop::options do
+    opt :logfile, 'Apache log file to parse', :short => 'f', :type => String
+    opt :parse, 'Parse apache log file', :short => 'p'
+    opt :result, 'Output result to blacklist file', :short => 'r', :default => true
+  end
+
+  Trollop::die :logfile, 'must exist' unless File.exists?(opts[:logfile]) if opts[:logfile]
+  Trollop::die :logfile, 'must be specified' if opts[:parse] and !opts[:logfile]
   create_table
-  parse(ARGV[0])
+
+  if opts[:parse]
+    parse(opts[:logfile])
+  elsif opts[:result]
+    Message.blacklist_ips
+  end
 end
